@@ -6,7 +6,9 @@ output: html_document
 ---
 This is a document dedicated to compiling data for my final project. The goal is to amass data from zebra and quagga mussel literature to input into fish bioenergetics 4 to make physiological models. 
 Input data sets: 
-- (insert citations)
+Quagga mussel respiration: 
+- Tyner, E. H., Bootsma, H. A., & Lafrancois, B. M. (2015). Dreissenid metabolism and ecosystem-scale effects as revealed by oxygen consumption. Journal of Great Lakes Research, 41, 27–37.
+
 
 Output: 
 (.csv file that will be compatible with fishbioenergetics 4.0)
@@ -18,4 +20,16 @@ library(dplyr)
 
 
 ```{r Read in data}
+
+```
+
+```{r Extract relevant values}
+
+```
+
+```{r Create new data frame}
+```
+
+```{r output new data frame}
+
 ```
