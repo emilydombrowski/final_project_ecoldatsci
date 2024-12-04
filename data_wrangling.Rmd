@@ -1,0 +1,21 @@
+---
+title: "data_wrangling"
+author: "Emily Dombrowski"
+date: "2024-12-04"
+output: html_document
+---
+This is a document dedicated to compiling data for my final project. The goal is to amass data from zebra and quagga mussel literature to input into fish bioenergetics 4 to make physiological models. 
+Input data sets: 
+- (insert citations)
+
+Output: 
+(.csv file that will be compatible with fishbioenergetics 4.0)
+
+```{r Load libraries}
+library(tidyverse)
+library(dplyr)
+```
+
+
+```{r Read in data}
+```
