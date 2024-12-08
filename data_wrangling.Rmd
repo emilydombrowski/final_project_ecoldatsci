@@ -27,6 +27,7 @@ library(dplyr)
 
 ```
 
+* Be sure to include relevant meta data for new data file.
 ```{r Create new data frame}
 ```
 
