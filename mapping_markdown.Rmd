@@ -1,0 +1,21 @@
+---
+title: "mapping_markdown"
+author: "Emily Dombrowski"
+date: "2024-12-08"
+output: html_document
+---
+
+```{r load libraries and data}
+library(sf)
+
+lake_regions <- st_read("mapping_files")
+```
+
+Plot lakes by region to see if it looks how I expect: 
+- It looks like this data set breaks the lake into a few more regions than I would. Still useful!
+```{r preliminary visualization}
+baseMap <- ggplot(lake_regions) +
+  geom_sf(aes(fill = GNIS_NAME)) 
+baseMap
+
+```
