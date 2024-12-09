@@ -4,8 +4,11 @@ author: "Emily Dombrowski"
 date: "2024-12-04"
 output: html_document
 ---
-This is a document dedicated to compiling data for my final project. The goal is to amass data from zebra and quagga mussel literature to input into fish bioenergetics 4 to make physiological models. 
+This is a document dedicated to compiling data for my final project. The goal is to amass data from zebra and quagga mussel literature to make physiological models. 
 Input data sets: 
+Zebra mussel bioenergetics:
+- Schneider, D. (1992). A bioenergetics model of zebra mussel, Dreissena polymorpha, growth in the Great Lakes. Canadian Journal of Fisheries and Aquatic Sciences, 49, 1406–1416.
+
 Quagga mussel respiration: 
 - Tyner, E. H., Bootsma, H. A., & Lafrancois, B. M. (2015). Dreissenid metabolism and ecosystem-scale effects as revealed by oxygen consumption. Journal of Great Lakes Research, 41, 27–37.
 
@@ -16,6 +19,7 @@ Output:
 ```{r Load libraries}
 library(tidyverse)
 library(dplyr)
+library(ggplot2)
 ```
 
 
@@ -23,14 +27,175 @@ library(dplyr)
 
 ```
 
-```{r Extract relevant values}
+# Provide values for three simulated quagga mussel scenarios
+1. Highly competitive
+2. Moderately competitive
+3. Weakly competitive
 
+Bioenergetics equation: C = R + A + SDA + F + U + G
+C = consumption (energy ingested) (expected to be higher in q)
+R = respiration (basal metabolism)
+A = active metabolism (na/constant, they don't move)
+SDA = specific dynamic action (energy lost during digestion)
+F = egestion (fecal waste) (DeVilbiss paper)
+U = excretion (nitrogenous waste) (DeVilbiss paper)
+G = growth (increase in body energy)
+
+Schneider equation:
+dw/dt = C - (R + F + U + G)
+
+If I have respiration rate: 
+- estimate weight vs respiration
+- Respiration * weight * f(t) (temperature dependence)
+- Use NLS package (Mark will send packages)
+- Fit a line, then estimate a and b for respiration equation
+
+
+Relevant zebra mussel bioenergetics parameters from Schneider, 1992:
+```{r bioenergetics parameters}
+# Respiration parameters
+a_r <- 0.01  # Specific respiration rate (g O2/g/day)
+b_r <- -0.25 # Weight exponent
+opt_temp_r <- 20  # Optimal temperature for respiration
+
+# Consumption parameters
+a_c <- 0.24  # Max consumption rate (g food/g/day)
+b_c <- -0.39 # Weight exponent for consumption
+opt_temp_c <- 16  # Optimal temperature for consumption
+food_availability <- 1  # P-value (1 = full food availability)
 ```
 
-* Be sure to include relevant meta data for new data file.
+Temperature, respiration, and consumption equations from Schneider, 1992:
+```{r temperature dependence function}
+temp_dependence <- function(temp, opt_temp) {
+  # Sigmoid-like curve with steep drop-off at low/high temps
+  exp(-((temp - opt_temp)^2) / 50)
+}
+```
+
+```{r respiration equation}
+respiration <- function(weight, temp) {
+  a_r * weight^b_r * temp_dependence(temp, opt_temp_r)
+}
+```
+
+```{r consumption equation}
+consumption <- function(weight, temp, food_avail) {
+  a_c * weight^b_c * temp_dependence(temp, opt_temp_c) * food_avail
+}
+```
+
+Aggregating simulated data into a df to visualize functions:
+```{r data frame generation}
+# Generate a grid of weights and temperatures
+weights <- seq(from = 0.5, 2.5, by = 0.1)  # Mussel weight (grams)
+temps <- seq(0, 30, by = 1)         # Water temperature (°C)
+data <- expand.grid(weight = weights, temp = temps)
+
+
+# Calculate respiration and consumption
+data$respiration <- mapply(respiration, data$weight, data$temp)
+data$consumption <- mapply(consumption, data$weight, data$temp, MoreArgs = list(food_avail = food_availability))
+```
+
+Plotting results for zebra mussel parameters:
+```{r plots}
+ggplot(data, aes(x = temp, y = respiration, color = as.factor(weight))) +
+  geom_line() +
+  labs(title = "Respiration vs Temperature",
+       x = "Temperature (°C)", y = "Respiration (g O2/g/day)",
+       color = "Weight (g)") +
+  theme_minimal()
+
+ggplot(data, aes(x = temp, y = consumption, color = as.factor(weight))) +
+  geom_line() +
+  labs(title = "Consumption vs Temperature",
+       x = "Temperature (°C)", y = "Consumption (g food/g/day)",
+       color = "Weight (g)") +
+  theme_minimal()
+```
+
+At this point, I want to create three simulated scenarios for quagga mussels:
+1. Highly competitive
+2. Moderately competitive
+3. Weakly competitive
+
+I will readjust the parameters I've used for zebra mussels based on relevant comparisons between species.
 ```{r Create new data frame}
 ```
 
 ```{r output new data frame}
 
+```
+
+After this, I will harvest data from chlorophyll and temperature in the different lake basins. I will then use estimates of mass to calculate zebra vs. quagga mussel performance in different basins over the year.
+
+1. Obtain data
+- monthly average chlorophyll
+- monthly average temperature
+- data separated by lake basins
+
+2. Choose a standardi
+
+```{r parameters}
+a_c <- 0.24
+b_c <- -0.39
+opt_temp_c <- 16  # consumption optimal temperature
+a_r <- 0.01
+b_r <- -0.25
+opt_temp_r <- 20  # respiration optimal temperature
+e_f <- 0.3 # egestion
+e_u <- 0.1 # excretion
+
+weights <- seq(0.5, 2, by = 0.01)  # Weight range (grams)
+```
+
+```{r lake champain basin information}
+# Temperature and food availability per basin
+basin_data <- data.frame(
+  basin = c("North", "South", "Main", "Missisquoi", "Champlain"),
+  avg_temp = c(15, 20, 18, 21, 17),  # Average temperature (°C)
+  food_avail = c(1, 0.8, 0.9, 1.2, 0.7)  # Food availability (proportional)
+)
+```
+
+```{r bioenergetics functions}
+# Temperature dependence function
+temp_dependence <- function(temp, opt_temp) {
+  exp(-((temp - opt_temp)^2) / 50)
+}
+
+# Bioenergetics model
+growth_potential <- function(weight, temp, food_avail) {
+  # Consumption
+  C <- a_c * weight^b_c * temp_dependence(temp, opt_temp_c) * food_avail
+  # Respiration
+  R <- a_r * weight^b_r * temp_dependence(temp, opt_temp_r)
+  # Egestion and Excretion
+  F <- e_f * C
+  U <- e_u * (C - F)
+  # Growth
+  G <- C - (R + F + U)
+  return(G)
+}
+```
+
+```{r}
+results <- do.call(rbind, lapply(1:nrow(basin_data), function(i) {
+  basin <- basin_data$basin[i]
+  temp <- basin_data$avg_temp[i]
+  food_avail <- basin_data$food_avail[i]
+  growth <- sapply(weights, growth_potential, temp = temp, food_avail = food_avail)
+  data.frame(basin = basin, weight = weights, growth = growth)
+}))
+```
+
+
+```{r}
+ggplot(results, aes(x = weight, y = growth, color = basin)) +
+  geom_line() +
+  labs(title = "Growth Potential by Basin and Weight",
+       x = "Weight (g)", y = "Growth (g/day)",
+       color = "Basin") +
+  theme_minimal()
 ```
