@@ -9,6 +9,55 @@ output: html_document
 library(sf)
 
 lake_regions <- st_read("mapping_files")
+regions_sf <- st_as_sf(lake_regions)
+
+temp_data <- read.csv("./data/temperature/jplMURSST41_027a_a010_bc86.csv")
+
+nrow(temp_data) #2406811
+```
+
+```{r data cleaning}
+
+# convert to numeric
+temp_data <- temp_data %>%
+  mutate(
+    longitude = as.numeric(longitude),
+    latitude = as.numeric(latitude),
+    analysed_sst = as.numeric(analysed_sst)
+  )
+
+# filter for na and nan
+temp_clean <- temp_data %>%
+  filter(!is.na(longitude) & !is.nan(longitude)) %>%
+  filter(!is.na(latitude) & !is.nan(latitude)) %>%
+  filter(!is.na(analysed_sst) & !is.nan(analysed_sst)) 
+nrow(temp_clean) # 554435; reduced from orginal set
+
+# take a look at data
+summary(temp_clean) 
+
+temp_sf <- st_as_sf(temp_clean, coords = c("longitude", "latitude"), crs = 4326)
+
+st_crs(lake_regions) <- 4326
+
+temp_with_regions <- st_join(temp_sf, lake_regions)
+
+# check if all regions got applied over
+unique(temp_with_regions$GNIS_NAME)
+```
+
+```{r}
+# Convert temp_data to an sf object
+temp_sf <- st_as_sf(temp_data, coords = c("longitude", "latitude"), crs = 4326)
+
+# Spatial join to assign regions from lake_regions to temp_data
+temp_with_regions <- st_join(temp_sf, lake_regions)
+
+# Check the result
+head(temp_with_regions)
+
+lake_temp <- lake_regions %>%
+  left_join(temp_data, by = "region")
 ```
 
 Plot lakes by region to see if it looks how I expect: 
@@ -17,5 +66,30 @@ Plot lakes by region to see if it looks how I expect:
 baseMap <- ggplot(lake_regions) +
   geom_sf(aes(fill = GNIS_NAME)) 
 baseMap
-
 ```
+
+Collapse data into month by month averages per basin for plotting
+```{r}
+temp_with_regions <- temp_with_regions %>%
+  mutate(month = format(as.Date(time), "%Y-%m"))
+
+monthly_avg_temp <- temp_with_regions %>%
+  group_by(GNIS_NAME, month) %>%
+  summarize(avg_temp = mean(analysed_sst, na.rm = TRUE), .groups = 'drop')
+
+ggplot(monthly_avg_temp, aes(x = month, y = avg_temp, color = GNIS_NAME)) +
+  geom_point() +
+  labs(title = "Monthly Average Temperatures by Region",
+       x = "Month", y = "Average Temperature (°C)") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+august_avg_temp <- monthly_avg_temp %>%
+  filter(month == "2023-08")
+```
+
+```{r}
+ggplot(august_avg_temp) +
+  geom_sf(aes(fill = GNIS_NAME, color = avg_temp)) + 
+  scale_color_viridis_c()
+``` 

@@ -66,3 +66,7 @@ temperature_data <- bind_rows(lapply(file_list, read_and_label_csv))
 
 # Save combined data
 write.csv(temperature_data, "data/LakeChamplain_temperature.csv", row.names = FALSE)
+
+
+# this code wasn't working; instead, I went to the erdap server and input the bounding box coordinates (max and min) alongside the date range
+# I downloaded the data with this URL: https://coastwatch.pfeg.noaa.gov/erddap/griddap/jplMURSST41.csv?analysed_sst%5B(2023-01-01T09:00:00Z):1:(2023-12-31T09:00:00Z)%5D%5B(43.53136):1:(45.08523)%5D%5B(-73.48796):1:(-73.07608)%5D,mask%5B(2023-01-01T09:00:00Z):1:(2023-12-31T09:00:00Z)%5D%5B(43.53136):1:(45.08523)%5D%5B(-73.48796):1:(-73.07608)%5D
