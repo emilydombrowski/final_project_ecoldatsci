@@ -7,19 +7,27 @@ output: html_document
 
 ```{r load libraries and data}
 library(sf)
+library(dplyr)
+library(ggplot2)
 
 lake_regions <- st_read("mapping_files")
 regions_sf <- st_as_sf(lake_regions)
 
 temp_data <- read.csv("./data/temperature/jplMURSST41_027a_a010_bc86.csv")
-
 nrow(temp_data) #2406811
 ```
 
 ```{r data cleaning}
 
-# convert to numeric
-temp_data <- temp_data %>%
+# change data columns in lake regions
+regions_sf <- rename(regions_sf, regions = GNIS_NAME)
+
+# remove variables that aren't relevant/na for smaller df
+regions_sf <- regions_sf %>%
+  select(-OBJECTID, -COMID, -REACHCODE, -FTYPE, -GDB_GEOMAT)
+
+# convert temp data to number categories to numeric
+temp_data_num <- temp_data %>%
   mutate(
     longitude = as.numeric(longitude),
     latitude = as.numeric(latitude),
@@ -27,69 +35,128 @@ temp_data <- temp_data %>%
   )
 
 # filter for na and nan
-temp_clean <- temp_data %>%
+temp_clean <- temp_data_num %>%
   filter(!is.na(longitude) & !is.nan(longitude)) %>%
   filter(!is.na(latitude) & !is.nan(latitude)) %>%
   filter(!is.na(analysed_sst) & !is.nan(analysed_sst)) 
 nrow(temp_clean) # 554435; reduced from orginal set
 
 # take a look at data
-summary(temp_clean) 
+str(temp_clean)
+summary(temp_clean)
 
+# convert to a shape file for plotting
 temp_sf <- st_as_sf(temp_clean, coords = c("longitude", "latitude"), crs = 4326)
 
-st_crs(lake_regions) <- 4326
+# make sure crs is consistent
+st_crs(temp_sf)
+st_crs(regions_sf)
 
-temp_with_regions <- st_join(temp_sf, lake_regions)
+# spatial join
+# st_within is applied to maintain only observations that fall within the regions
+regions_temp <- st_join(temp_sf, regions_sf,
+                        join = st_within)
+nrow(regions_temp) #554435
+
+# filter out na for region so we are only left with lc regions
+regions_temp <- regions_temp %>%
+  filter(!is.na(regions))
+nrow(regions_temp) #431430
 
 # check if all regions got applied over
-unique(temp_with_regions$GNIS_NAME)
-```
-
-```{r}
-# Convert temp_data to an sf object
-temp_sf <- st_as_sf(temp_data, coords = c("longitude", "latitude"), crs = 4326)
-
-# Spatial join to assign regions from lake_regions to temp_data
-temp_with_regions <- st_join(temp_sf, lake_regions)
-
-# Check the result
-head(temp_with_regions)
-
-lake_temp <- lake_regions %>%
-  left_join(temp_data, by = "region")
+unique(regions_temp$regions)
 ```
 
 Plot lakes by region to see if it looks how I expect: 
 - It looks like this data set breaks the lake into a few more regions than I would. Still useful!
 ```{r preliminary visualization}
-baseMap <- ggplot(lake_regions) +
-  geom_sf(aes(fill = GNIS_NAME)) 
+baseMap <- ggplot(regions_sf) +
+  geom_sf(aes(fill = regions)) 
 baseMap
+
+regions_sf
+
+regions_wide <- regions_sf %>%
+  st_join(regions_temp_wide)
 ```
 
 Collapse data into month by month averages per basin for plotting
 ```{r}
-temp_with_regions <- temp_with_regions %>%
-  mutate(month = format(as.Date(time), "%Y-%m"))
+# add a column for month
+ regions_temp <- regions_temp %>%
+  mutate(month = format(as.Date(time), "%m-%Y"))
 
-monthly_avg_temp <- temp_with_regions %>%
-  group_by(GNIS_NAME, month) %>%
+# create a new df with monthly mean temperature
+monthly_avg_temp <- regions_temp %>%
+  group_by(regions, month) %>%
   summarize(avg_temp = mean(analysed_sst, na.rm = TRUE), .groups = 'drop')
 
-ggplot(monthly_avg_temp, aes(x = month, y = avg_temp, color = GNIS_NAME)) +
+# wide format
+regions_temp_wide <- monthly_avg_temp %>%  # Temporarily drop geometry for reshaping
+  pivot_wider(
+    names_from = month,  # Use `month` as column names
+    values_from = avg_temp  # Fill values with `avg_temp`
+  ) %>%
+  st_as_sf()
+
+regions_temp_wide <- st_buffer(regions_temp_wide, dist = 100)
+
+
+# plot data over a 12 month period
+# x axis: months
+# y axis: average temperature
+# color: basin
+ggplot(monthly_avg_temp, aes(x = month, y = avg_temp, color = regions)) +
   geom_point() +
-  labs(title = "Monthly Average Temperatures by Region",
-       x = "Month", y = "Average Temperature (°C)") +
+  labs(title = "Monthly average temperature by lake region",
+       x = "Month", y = "Average temperature (°C)") +
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
-august_avg_temp <- monthly_avg_temp %>%
-  filter(month == "2023-08")
+ggplot(data = monthly_avg_temp) +
+  geom_sf(mapping = aes(fill = GNIS_NAME,
+                        color = avg_temp))
+
+ggplot(data = monthly_avg_temp) + 
+  geom_sf(mapping = aes(color = GNIS_NAME,
+                        fill = avg_temp))
+
+plot(monthly_avg_temp)
 ```
 
 ```{r}
-ggplot(august_avg_temp) +
-  geom_sf(aes(fill = GNIS_NAME, color = avg_temp)) + 
-  scale_color_viridis_c()
-``` 
+ggplot(regions_temp_wide) + geom_sf(aes(fill = regions, color = '01-2023'))
+
+ggplot(data = regions_temp_wide) +
+   geom_sf(aes(fill = '01-2023', color = regions))
+
+ggplot() +
+  geom_sf(data = regions_temp_wide, aes(fill = `01-2023`, color = regions)) +
+  scale_fill_viridis_c()
+
+ggplot(data = regions_temp_wide) +
+  geom_sf(aes(fill = `01-2023`, color = regions)) +
+  scale_fill_viridis_c()
+
+ggplot(data = regions_temp_wide) +
+  geom_sf(aes(fill = `01-2023`)) + # Fill the whole polygon based on the temperature
+  scale_fill_viridis_c()
+
+ggplot(data = regions_temp_wide) +
+  geom_sf(aes(fill = as.numeric(`01-2023`))) + # Ensure '01-2023' is treated as numeric
+  scale_fill_viridis_c()
+
+ggplot(data = regions_temp_wide) +
+  geom_sf(aes(fill = as.numeric(`01-2023`))) + # Use numeric value for fill
+  scale_fill_viridis_c()
+
+ggplot(data = regions_temp_wide) +
+  geom_sf(aes(fill = regions, color = "01-2023"))
+
+ggplot(regions_temp_wide) +
+  geom_sf(aes(fill = '01-2023')) +
+  theme_void()
+
+ggplot(regions_wide) +
+  geom_sf(fill = regions_wide$regions.x) 
+```

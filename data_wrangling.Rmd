@@ -99,18 +99,21 @@ data$consumption <- mapply(consumption, data$weight, data$temp, MoreArgs = list(
 ```
 
 Plotting results for zebra mussel parameters:
+Looking at how mass affects these parameters, and how respiration and consumption are responding with temperature. Some preliminary model exploration.
 ```{r plots}
 ggplot(data, aes(x = temp, y = respiration, color = as.factor(weight))) +
   geom_line() +
   labs(title = "Respiration vs Temperature",
-       x = "Temperature (°C)", y = "Respiration (g O2/g/day)",
+       x = "Temperature (°C)", 
+       y = "Respiration (g O2/g/day)",
        color = "Weight (g)") +
   theme_minimal()
 
 ggplot(data, aes(x = temp, y = consumption, color = as.factor(weight))) +
   geom_line() +
   labs(title = "Consumption vs Temperature",
-       x = "Temperature (°C)", y = "Consumption (g food/g/day)",
+       x = "Temperature (°C)", 
+       y = "Consumption (g food/g/day)",
        color = "Weight (g)") +
   theme_minimal()
 ```
@@ -150,6 +153,7 @@ e_u <- 0.1 # excretion
 weights <- seq(0.5, 2, by = 0.01)  # Weight range (grams)
 ```
 
+Some made up numbers to visualize the next plot and see how behavior changes:
 ```{r lake champain basin information}
 # Temperature and food availability per basin
 basin_data <- data.frame(
@@ -167,7 +171,7 @@ temp_dependence <- function(temp, opt_temp) {
 
 # Bioenergetics model
 growth_potential <- function(weight, temp, food_avail) {
-  # Consumption
+  # Consumption: equation from
   C <- a_c * weight^b_c * temp_dependence(temp, opt_temp_c) * food_avail
   # Respiration
   R <- a_r * weight^b_r * temp_dependence(temp, opt_temp_r)
@@ -190,7 +194,7 @@ results <- do.call(rbind, lapply(1:nrow(basin_data), function(i) {
 }))
 ```
 
-
+How does mass affect how zebra mussels perform in each basin?
 ```{r}
 ggplot(results, aes(x = weight, y = growth, color = basin)) +
   geom_line() +
