@@ -1,0 +1,127 @@
+---
+title: "chla_mapping"
+author: "Emily Dombrowski"
+date: "2024-12-11"
+output: html_document
+---
+```{r load libraries and data}
+# libraries
+library(sf)
+library(dplyr)
+library(ggplot2)
+
+# lake shape files
+lake_regions <- st_read("mapping_files")
+regions_sf <- st_as_sf(lake_regions)
+
+# chla data
+chla_data <- read.csv("./data/erdap_griddap_lakeChamplain_chla.csv")
+nrow(chla_data) #157381
+```
+
+```{r data cleaning}
+# change data columns in lake regions
+regions_sf <- rename(regions_sf, regions = GNIS_NAME)
+
+# remove variables that aren't relevant/na for smaller df
+regions_sf <- regions_sf %>%
+  select(-OBJECTID, -COMID, -REACHCODE, -FTYPE, -GDB_GEOMAT)
+
+# convert temp data to number categories to numeric
+chla_data_num <- chla_data %>%
+  mutate(
+    longitude = as.numeric(longitude),
+    latitude = as.numeric(latitude),
+    chlor_a = as.numeric(chlor_a)
+  )
+
+# filter for na and nan
+chla_clean <- chla_data_num %>%
+  filter(!is.na(longitude) & !is.nan(longitude)) %>%
+  filter(!is.na(latitude) & !is.nan(latitude)) %>%
+  filter(!is.na(chlor_a) & !is.nan(chlor_a)) 
+nrow(chla_clean) # 9680; reduced from original set
+
+# take a look at data
+str(chla_clean)
+summary(chla_clean)
+
+# remove altitude column, did not download that from ERDAP
+# rename chlor_a to chla, easier to type and consistent with my naming
+chla_clean <- chla_clean %>%
+  select(-altitude) %>%
+  rename(chla = chlor_a)
+
+# convert to sf for plotting
+chla_sf <- st_as_sf(chla_clean, coords = c("longitude", "latitude"), crs = 4326)
+class(chla_sf)
+
+regions_chla_sf <- st_join(chla_sf, regions_sf,
+                        join = st_within)
+
+# the final geometries are different classes; not what I am looking for
+class(regions_sf$geometry) # [1] "sfc_POLYGON" "sfc"  
+class(regions_chla_sf$geometry) # [1] "sfc_POINT" "sfc" 
+
+# Extract the polygons from the joined data frame
+regions_chla_sf$geometry <- regions_sf$geometry[match(regions_chla_sf$regions, regions_sf$regions)] 
+
+# Check geometry type...yay!
+class(regions_chla_sf$geometry) # [1] "sfc_POLYGON" "sfc" 
+
+# filter out na for region so we are only left with lc regions
+regions_chla_sf <- regions_chla_sf %>%
+  filter(!is.na(regions))
+nrow(regions_chla_sf) #6549
+
+# check if all regions got applied over
+unique(regions_chla_sf$regions)
+```
+
+```{r initial plotting}
+# check out geometry of regions_sf
+baseMap <- ggplot(regions_sf) +
+  geom_sf(aes(fill = regions)) 
+baseMap
+
+```
+
+```{r}
+# add a column for month
+regions_chla_sf <- regions_chla_sf %>%
+  mutate(month = format(as.Date(time), "%m-%Y"))
+
+# keeps crashing my r session
+# regions_chla_sf <- regions_chla_sf %>%
+#   group_by(regions, month) %>%
+#   summarize(avg_chla = mean(chla, na.rm = TRUE), .groups = 'drop')
+
+names(regions_chla_sf)
+
+# new df with only chla, month, and region
+small_df <- regions_chla_sf %>%
+  st_drop_geometry() %>%
+  select(-time, -AREASQKM, -SHAPESTAre, -SHAPESTLen)
+
+st_drop_geometry()
+
+small_df <- small_df %>%
+  group_by(regions, month) %>%
+  summarize(avg_chla = mean(chla, na.rm = TRUE), .groups = 'drop')
+
+joined_df <- st_join(small_df, regions_sf, by = "regions") 
+
+joined_sf <- st_as_sf(joined_df) 
+```
+
+```{r}
+april_data <- joined_sf %>% 
+  filter(month == "04-2024")
+
+# Create the map
+ggplot(april_data) +
+  geom_sf(aes(fill = avg_chla), color = "black") + 
+  scale_fill_gradient(low = "lightblue", high = "darkblue", name = "Average Chlorophyll-a") +
+  labs(title = "Average Chlorophyll-a in April") +
+  theme_bw() 
+```
