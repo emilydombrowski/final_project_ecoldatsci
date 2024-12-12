@@ -103,17 +103,15 @@ small_df <- regions_chla_sf %>%
   st_drop_geometry() %>%
   select(-time, -AREASQKM, -SHAPESTAre, -SHAPESTLen)
 
-st_drop_geometry()
-
 small_df <- small_df %>%
   group_by(regions, month) %>%
   summarize(avg_chla = mean(chla, na.rm = TRUE), .groups = 'drop')
 
-joined_df <- st_join(small_df, regions_sf, by = "regions") 
+joined_df <- left_join(small_df, regions_sf, by = "regions") 
 
-joined_sf <- st_as_sf(joined_df) 
+joined_sf <- st_as_sf(joined_df)
 ```
-
+How does chlorphyll concentration change in different parts of the lake?
 ```{r}
 april_data <- joined_sf %>% 
   filter(month == "04-2024")
@@ -121,7 +119,17 @@ april_data <- joined_sf %>%
 # Create the map
 ggplot(april_data) +
   geom_sf(aes(fill = avg_chla), color = "black") + 
-  scale_fill_gradient(low = "lightblue", high = "darkblue", name = "Average Chlorophyll-a") +
+  scale_fill_viridis_c(name = "Average Chlorophyll-a (mg m^-3)") +
   labs(title = "Average Chlorophyll-a in April") +
   theme_bw() 
+```
+How does chlorophyll-a change in each region of the lake month by month?
+```{r}
+ggplot(joined_df, aes(x = month, y = avg_chla, color = regions)) +
+  geom_point() +
+  geom_line(aes(group = regions)) +
+  labs(title = "Monthly average chlorophyll by lake region",
+       x = "Month", y = "Average chlorophyll (mg m^-3)") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ```

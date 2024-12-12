@@ -27,7 +27,7 @@ regions_sf <- regions_sf %>%
   select(-OBJECTID, -COMID, -REACHCODE, -FTYPE, -GDB_GEOMAT)
 
 # convert temp data to number categories to numeric
-temp_data_num <- temp_data %>%
+temp_data <- temp_data %>%
   mutate(
     longitude = as.numeric(longitude),
     latitude = as.numeric(latitude),
@@ -35,7 +35,7 @@ temp_data_num <- temp_data %>%
   )
 
 # filter for na and nan
-temp_clean <- temp_data_num %>%
+temp_clean <- temp_data %>%
   filter(!is.na(longitude) & !is.nan(longitude)) %>%
   filter(!is.na(latitude) & !is.nan(latitude)) %>%
   filter(!is.na(analysed_sst) & !is.nan(analysed_sst)) 
@@ -63,6 +63,18 @@ regions_temp <- regions_temp %>%
   filter(!is.na(regions))
 nrow(regions_temp) #431430
 
+# the final geometries are different classes; not what I am looking for
+class(regions_sf$geometry) # [1] "sfc_POLYGON" "sfc"  
+class(regions_temp$geometry) # [1] "sfc_POINT" "sfc"
+
+# Extract the polygons from the joined data frame
+# regions_temp$geometry <- 
+#  regions_sf$geometry[match(regions_temp$regions,
+#                            regions_sf$regions)] 
+
+# Check geometry type...yay!
+# class(regions_temp$geometry)
+
 # check if all regions got applied over
 unique(regions_temp$regions)
 ```
@@ -73,11 +85,6 @@ Plot lakes by region to see if it looks how I expect:
 baseMap <- ggplot(regions_sf) +
   geom_sf(aes(fill = regions)) 
 baseMap
-
-regions_sf
-
-regions_wide <- regions_sf %>%
-  st_join(regions_temp_wide)
 ```
 
 Collapse data into month by month averages per basin for plotting
@@ -86,77 +93,42 @@ Collapse data into month by month averages per basin for plotting
  regions_temp <- regions_temp %>%
   mutate(month = format(as.Date(time), "%m-%Y"))
 
+names(regions_temp)
+
+small_df <- regions_temp %>%
+  st_drop_geometry() %>%
+  select(-time, -AREASQKM, -SHAPESTAre, -SHAPESTLen, -mask) %>%
+  filter(!is.na(regions))
+
 # create a new df with monthly mean temperature
-monthly_avg_temp <- regions_temp %>%
+small_df <- small_df %>%
   group_by(regions, month) %>%
   summarize(avg_temp = mean(analysed_sst, na.rm = TRUE), .groups = 'drop')
+```
 
-# wide format
-regions_temp_wide <- monthly_avg_temp %>%  # Temporarily drop geometry for reshaping
-  pivot_wider(
-    names_from = month,  # Use `month` as column names
-    values_from = avg_temp  # Fill values with `avg_temp`
-  ) %>%
-  st_as_sf()
+Rejoin spatial geometries:
+```{r}
+joined_df <- left_join(small_df, regions_sf, by = "regions")
 
-regions_temp_wide <- st_buffer(regions_temp_wide, dist = 100)
+joined_sf <- st_as_sf(joined_df)
+```
 
-
-# plot data over a 12 month period
-# x axis: months
-# y axis: average temperature
-# color: basin
-ggplot(monthly_avg_temp, aes(x = month, y = avg_temp, color = regions)) +
+Plots: 
+```{r}
+ggplot(joined_df, aes(x = month, y = avg_temp, color = regions)) +
   geom_point() +
   labs(title = "Monthly average temperature by lake region",
        x = "Month", y = "Average temperature (°C)") +
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
-ggplot(data = monthly_avg_temp) +
-  geom_sf(mapping = aes(fill = GNIS_NAME,
-                        color = avg_temp))
+july_data <- joined_sf %>% 
+  filter(month == "07-2023")
 
-ggplot(data = monthly_avg_temp) + 
-  geom_sf(mapping = aes(color = GNIS_NAME,
-                        fill = avg_temp))
-
-plot(monthly_avg_temp)
-```
-
-```{r}
-ggplot(regions_temp_wide) + geom_sf(aes(fill = regions, color = '01-2023'))
-
-ggplot(data = regions_temp_wide) +
-   geom_sf(aes(fill = '01-2023', color = regions))
-
-ggplot() +
-  geom_sf(data = regions_temp_wide, aes(fill = `01-2023`, color = regions)) +
-  scale_fill_viridis_c()
-
-ggplot(data = regions_temp_wide) +
-  geom_sf(aes(fill = `01-2023`, color = regions)) +
-  scale_fill_viridis_c()
-
-ggplot(data = regions_temp_wide) +
-  geom_sf(aes(fill = `01-2023`)) + # Fill the whole polygon based on the temperature
-  scale_fill_viridis_c()
-
-ggplot(data = regions_temp_wide) +
-  geom_sf(aes(fill = as.numeric(`01-2023`))) + # Ensure '01-2023' is treated as numeric
-  scale_fill_viridis_c()
-
-ggplot(data = regions_temp_wide) +
-  geom_sf(aes(fill = as.numeric(`01-2023`))) + # Use numeric value for fill
-  scale_fill_viridis_c()
-
-ggplot(data = regions_temp_wide) +
-  geom_sf(aes(fill = regions, color = "01-2023"))
-
-ggplot(regions_temp_wide) +
-  geom_sf(aes(fill = '01-2023')) +
-  theme_void()
-
-ggplot(regions_wide) +
-  geom_sf(fill = regions_wide$regions.x) 
+# Create the map
+ggplot(july_data) +
+  geom_sf(aes(fill = avg_temp), color = "black") + 
+  scale_fill_gradient(low = "lightblue", high = "maroon", name = "Average temperature (°C)") +
+  labs(title = "Average temperature in July") +
+  theme_bw() 
 ```
