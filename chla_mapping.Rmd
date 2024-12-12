@@ -133,3 +133,9 @@ ggplot(joined_df, aes(x = month, y = avg_chla, color = regions)) +
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ```
+
+Output joined_sf so I can use it in other scripts:
+```{r}
+# st_write(joined_sf, "2024_avg_chla_data.shp", driver = "ESRI Shapefile")
+# write.csv(st_drop_geometry(joined_df), "2024_avg_chla_data.csv", row.names = FALSE)
+```

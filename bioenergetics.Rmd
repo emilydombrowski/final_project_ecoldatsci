@@ -1,0 +1,113 @@
+---
+title: "bioenergetics"
+author: "Emily Dombrowski"
+date: "2024-12-12"
+output: html_document
+---
+
+A markdown file to combine data from chla_mapping.Rmd & mapping_markdown.Rmd with the model explored in data_wrangling.Rmd.
+
+Inputs: 
+* Zebra and quagga mussels bioenergetics values
+* Average monthly temperature per lake champlain basin
+* Average monthly chlorophyll content per lake champlain basin
+
+Outputs: 
+* Bioenergetics growth rate graphs
+* Spatial representations of mussel growth in each lake basin
+
+1. Load libraries
+```{r}
+library(dplyr) # for cleaning and wrangling data frames
+library(ggplot2) # for visualizing data
+library(sf) # for mapping data
+```
+
+2. Load data
+```{r}
+# lake shape files
+temp <- st_read("./data/monthly_temp_sf")
+chla <- st_read("./data/monthly_chla_sf")
+
+# remove data from december 2023
+temp <- temp %>%
+    filter(month != "12-2023") 
+chla <- chla %>%
+  filter(month != "12-2023")
+
+# drop geometry for a left join
+temp_df <- st_drop_geometry(temp)
+chla_df <- st_drop_geometry(chla)
+
+# use left join to get combine chla and temperature data frame
+env_dat <- left_join(temp_df, chla_df, by = c("regions", "month")) 
+
+# read in bioenergetics parameters
+parameters <- read.csv("bioenergetics_parameters.csv")
+```
+
+# load functions for bioenergetics model
+```{r}
+temp_dependence <- function(temp, opt_temp) {
+  exp(-((temp - opt_temp)^2) / 50)
+}
+
+growth_potential <- function(weight, temp, food_avail, a_c, b_c, opt_temp_c, a_r, b_r, opt_temp_r, e_f, e_u) {
+  # Consumption
+  C <- a_c * weight^b_c * temp_dependence(temp, opt_temp_c) * food_avail
+  
+  # Respiration
+  R <- a_r * weight^b_r * temp_dependence(temp, opt_temp_r)
+  
+  # Egestion and Excretion
+  F <- e_f * C
+  U <- e_u * (C - F)
+  
+  # Growth
+  G <- C - (R + F + U)
+  
+  return(G)
+}
+
+```
+
+```{r}
+growth_results <- expand_grid(
+  env_dat, 
+  parameters
+) %>% 
+  mutate(
+    growth = growth_potential(
+      weight = 1,
+      temp = avg_temp, 
+      food_avail = avg_chla, 
+      a_c = a_c, 
+      b_c = b_c, 
+      opt_temp_c = opt_temp_c, 
+      a_r = a_r, 
+      b_r = b_r, 
+      opt_temp_r = opt_temp_r, 
+      e_f = e_f, 
+      e_u = e_u
+    )
+  )
+
+```
+
+Plot results
+```{r}
+growth_results_main_central <- growth_results %>%
+    filter(regions == "Main_Central")
+
+ggplot(growth_results_main_central, aes(x = month, y = growth, color = mussel)) +
+  geom_line() +
+  labs(
+    title = "Growth Potential of Mussel Species in Main_central Basin",
+    x = "Month",
+    y = "Growth Rate"
+  ) 
+
+ggplot(growth_results_main_central, aes(x = month, y = growth, color = mussel, group = mussel)) + 
+  geom_line() + 
+  theme_bw()
+```

@@ -1,0 +1,4 @@
+"mussel","a_c","b_c","opt_temp_c","a_r","b_r","opt_temp_r","e_f","e_u","mass_standard"
+"zebra",0.24,-0.39,16,0.01,-0.25,20,0.3,0.1,1
+"quagga_highly_competitive",0.5,-0.39,16,0.01,-0.25,18,0.3,0.1,1
+"quagga_weakly_comepttive",0.24,-0.39,12,0.005,-0.25,16,0.3,0.1,1

@@ -22,11 +22,6 @@ library(dplyr)
 library(ggplot2)
 ```
 
-
-```{r Read in data}
-
-```
-
 # Provide values for three simulated quagga mussel scenarios
 1. Highly competitive
 2. Moderately competitive
@@ -150,7 +145,17 @@ opt_temp_r <- 20  # respiration optimal temperature
 e_f <- 0.3 # egestion
 e_u <- 0.1 # excretion
 
-weights <- seq(0.5, 2, by = 0.01)  # Weight range (grams)
+weights <- seq(0.5, 1.50, by = 0.01)  # Weight range (grams)
+
+# Create a data frame with blank columns for additional scenarios
+data <- data.frame(
+  weight = weights,
+  consumption_rate = NA,
+  respiration_rate = NA,
+  highly_competitive_quagga = NA,
+  weakly_competitive_quagga = NA
+)
+
 ```
 
 Some made up numbers to visualize the next plot and see how behavior changes:
@@ -198,7 +203,7 @@ How does mass affect how zebra mussels perform in each basin?
 ```{r}
 ggplot(results, aes(x = weight, y = growth, color = basin)) +
   geom_line() +
-  labs(title = "Growth Potential by Basin and Weight",
+  labs(title = "Zebra mussel growth potential by lake basin and weight",
        x = "Weight (g)", y = "Growth (g/day)",
        color = "Basin") +
   theme_minimal()

@@ -13,8 +13,11 @@ library(ggplot2)
 lake_regions <- st_read("mapping_files")
 regions_sf <- st_as_sf(lake_regions)
 
-temp_data <- read.csv("./data/temperature/jplMURSST41_027a_a010_bc86.csv")
-nrow(temp_data) #2406811
+# 2023 data
+# temp_data <- read.csv("./data/temperature/jplMURSST41_027a_a010_bc86.csv")
+
+temp_data <- read.csv("./data/erdap_griddap_lakeChamplain_temp_2024.csv")
+nrow(temp_data) #2419999
 ```
 
 ```{r data cleaning}
@@ -39,7 +42,7 @@ temp_clean <- temp_data %>%
   filter(!is.na(longitude) & !is.nan(longitude)) %>%
   filter(!is.na(latitude) & !is.nan(latitude)) %>%
   filter(!is.na(analysed_sst) & !is.nan(analysed_sst)) 
-nrow(temp_clean) # 554435; reduced from orginal set
+nrow(temp_clean) # 557473; reduced from orginal set
 
 # take a look at data
 str(temp_clean)
@@ -56,12 +59,12 @@ st_crs(regions_sf)
 # st_within is applied to maintain only observations that fall within the regions
 regions_temp <- st_join(temp_sf, regions_sf,
                         join = st_within)
-nrow(regions_temp) #554435
+nrow(regions_temp) #557473
 
 # filter out na for region so we are only left with lc regions
 regions_temp <- regions_temp %>%
   filter(!is.na(regions))
-nrow(regions_temp) #431430
+nrow(regions_temp) #433794
 
 # the final geometries are different classes; not what I am looking for
 class(regions_sf$geometry) # [1] "sfc_POLYGON" "sfc"  
@@ -97,7 +100,7 @@ names(regions_temp)
 
 small_df <- regions_temp %>%
   st_drop_geometry() %>%
-  select(-time, -AREASQKM, -SHAPESTAre, -SHAPESTLen, -mask) %>%
+  select(-time, -AREASQKM, -SHAPESTAre, -SHAPESTLen,) %>%
   filter(!is.na(regions))
 
 # create a new df with monthly mean temperature
@@ -123,12 +126,17 @@ ggplot(joined_df, aes(x = month, y = avg_temp, color = regions)) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
 july_data <- joined_sf %>% 
-  filter(month == "07-2023")
+  filter(month == "07-2024")
 
 # Create the map
 ggplot(july_data) +
   geom_sf(aes(fill = avg_temp), color = "black") + 
-  scale_fill_gradient(low = "lightblue", high = "maroon", name = "Average temperature (°C)") +
+  scale_fill_gradient(low = "#67a9cf", high = "#ef8a62", name = "Average temperature (°C)") +
   labs(title = "Average temperature in July") +
   theme_bw() 
+```
+Output joined_sf so I can use it in other scripts:
+```{r}
+# st_write(joined_sf, "2024_avg_temp_data.shp", driver = "ESRI Shapefile")
+# write.csv(st_drop_geometry(joined_df), "2024_avg_temp_data.csv", row.names = FALSE)
 ```
