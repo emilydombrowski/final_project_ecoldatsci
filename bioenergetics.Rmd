@@ -39,14 +39,23 @@ chla <- chla %>%
 temp_df <- st_drop_geometry(temp)
 chla_df <- st_drop_geometry(chla)
 
+# create a new column that converts ERDAP chlorphyll a data
+# step 1: mg to g (* 0.001)
+# step 2: multiply chla by a scaling factor (80) to account for other types of plankton
+chla_df$chla_g <- chla_df$avg_chla * 0.001 * 80
+
 # use left join to get combine chla and temperature data frame
 env_dat <- left_join(temp_df, chla_df, by = c("regions", "month")) 
 
 # read in bioenergetics parameters
 parameters <- read.csv("bioenergetics_parameters.csv")
+
+# lake shape files
+lake_regions <- st_read("mapping_files")
+regions_sf <- st_as_sf(lake_regions)
 ```
 
-# load functions for bioenergetics model
+3. load functions for bioenergetics model
 ```{r}
 temp_dependence <- function(temp, opt_temp) {
   exp(-((temp - opt_temp)^2) / 50)
@@ -71,6 +80,7 @@ growth_potential <- function(weight, temp, food_avail, a_c, b_c, opt_temp_c, a_r
 
 ```
 
+4. Use parameters in environmental data and parameter files to inform models
 ```{r}
 growth_results <- expand_grid(
   env_dat, 
@@ -80,7 +90,7 @@ growth_results <- expand_grid(
     growth = growth_potential(
       weight = 1,
       temp = avg_temp, 
-      food_avail = avg_chla, 
+      food_avail = chla_g, 
       a_c = a_c, 
       b_c = b_c, 
       opt_temp_c = opt_temp_c, 
@@ -94,20 +104,47 @@ growth_results <- expand_grid(
 
 ```
 
-Plot results
+5. Plot results
 ```{r}
-growth_results_main_central <- growth_results %>%
-    filter(regions == "Main_Central")
+growth_results_subset <- growth_results %>%
+  filter(regions %in% c("Main_Central", 
+                      "South_Lake", "Malletts", "NE_Channel"))
+# error with missiqoui
 
-ggplot(growth_results_main_central, aes(x = month, y = growth, color = mussel)) +
-  geom_line() +
-  labs(
-    title = "Growth Potential of Mussel Species in Main_central Basin",
-    x = "Month",
-    y = "Growth Rate"
-  ) 
-
-ggplot(growth_results_main_central, aes(x = month, y = growth, color = mussel, group = mussel)) + 
+ggplot(growth_results, aes(x = month, y = growth, color = mussel, group = mussel)) + 
   geom_line() + 
+  xlab("Month") + 
+  ylab("Growth rate (g/g day)") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  facet_wrap(~ regions)
+
+ggplot(growth_results_subset, aes(x = month, y = growth, color = mussel, group = mussel)) + 
+  geom_line() +
+  xlab("Month") + 
+  ylab("Growth rate (g/g day)") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  facet_wrap(~ regions) +
+  theme(legend.position = "bottom",
+        legend.text = element_text(size = 6), 
+        legend.title = element_text(size = 8))
+```
+
+6. Map results
+```{r}
+# change data columns in lake regions
+regions_sf <- rename(regions_sf, regions = GNIS_NAME)
+growth_df <- left_join(growth_results, regions_sf, by = "regions") 
+growth_sf <- st_as_sf(growth_df)
+
+# filter for one month to start
+aug_data <- growth_sf %>% 
+  filter(month == "08-2024")
+
+ggplot(aug_data) +
+  geom_sf(aes(fill = growth), color = "black") + 
+  scale_fill_viridis_c(name = "Average mussel growth (g/ g day)") +
+  facet_wrap(~mussel) +
   theme_bw()
 ```
